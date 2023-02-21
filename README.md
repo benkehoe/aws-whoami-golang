@@ -24,7 +24,11 @@ your account alias won't appear. See below for disabling this check if getting a
 
 ## Install
 
-[Download the latest release for your platform](https://github.com/benkehoe/aws-whoami-golang/releases).
+```
+go install github.com/benkehoe/aws-whoami-golang/aws-whoami@latest
+```
+
+[Or download the latest release for your platform](https://github.com/benkehoe/aws-whoami-golang/releases/latest).
 
 
 ## Options

@@ -32,7 +32,7 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-var Version string = "2.3"
+var Version string = "2.4"
 
 type Whoami struct {
 	Account          string
@@ -125,10 +125,15 @@ func NewWhoami(awsConfig aws.Config, params WhoamiParams) (Whoami, error) {
 	whoami.UserId = *getCallerIdentityOutput.UserId
 
 	arnFields := strings.Split(whoami.Arn, ":")
-	arnResourceFields := strings.SplitN(arnFields[len(arnFields)-1], "/", 2)
 
-	if len(arnResourceFields) < 2 {
-		return whoami, fmt.Errorf("arn %v has an unknown format", whoami.Arn)
+	var arnResourceFields []string
+	if arnFields[len(arnFields)-1] == "root" {
+		arnResourceFields = []string{"root", "root"}
+	} else {
+		arnResourceFields = strings.SplitN(arnFields[len(arnFields)-1], "/", 2)
+		if len(arnResourceFields) < 2 {
+			return whoami, fmt.Errorf("arn %v has an unknown format", whoami.Arn)
+		}
 	}
 
 	whoami.Type = arnResourceFields[0]
@@ -179,15 +184,18 @@ type record struct {
 	value string
 }
 
-func getTypeField(typeName string) string {
-	fields := strings.Split(typeName, "-")
-	values := make([]string, 0, 3)
+func getTypeNameRecord(whoami Whoami) record {
+	if whoami.Type == "root" {
+		return record{"Type: ", "root"}
+	}
+	fields := strings.Split(whoami.Type, "-")
+	typeParts := make([]string, 0, 3)
 	for _, field := range fields {
 		s := strings.ToUpper(field[:1]) + field[1:] // ok because always ASCII
-		values = append(values, s)
+		typeParts = append(typeParts, s)
 	}
-	values = append(values, ": ")
-	return strings.Join(values, "")
+	typeParts = append(typeParts, ": ")
+	return record{strings.Join(typeParts, ""), whoami.Name}
 }
 
 func (whoami Whoami) Format() string {
@@ -200,7 +208,7 @@ func (whoami Whoami) Format() string {
 	if whoami.SSOPermissionSet != nil {
 		records = append(records, record{"AWS SSO: ", *whoami.SSOPermissionSet})
 	} else {
-		records = append(records, record{getTypeField(whoami.Type), whoami.Name})
+		records = append(records, getTypeNameRecord(whoami))
 	}
 	if whoami.RoleSessionName != nil {
 		records = append(records, record{"RoleSessionName: ", *whoami.RoleSessionName})

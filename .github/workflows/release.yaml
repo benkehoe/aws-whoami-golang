@@ -16,7 +16,7 @@ jobs:
             goos: windows
     steps:
     - uses: actions/checkout@v3
-    - uses: wangyoucao577/go-release-action@v1.30
+    - uses: wangyoucao577/go-release-action@v1.35
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         goos: ${{ matrix.goos }}
@@ -24,4 +24,5 @@ jobs:
         extra_files: LICENSE README.md
         compress_assets: "true"
         md5sum: "false"
+        project_path: aws-whoami
         binary_name: aws-whoami

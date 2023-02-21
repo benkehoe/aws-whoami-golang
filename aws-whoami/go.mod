@@ -1,4 +1,4 @@
-module github.com/benkehoe/aws-whoami-golang
+module github.com/benkehoe/aws-whoami-golang/aws-whoami
 
 go 1.19
 
