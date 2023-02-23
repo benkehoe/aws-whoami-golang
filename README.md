@@ -80,3 +80,24 @@ For the account root, both the `Type` and `Name` are `"root"`.
 Note that the `AccountAliases` field is an empty list when account alias checking is disabled, not `null`.
 
 If there is an error, a JSON object is printed with the following structure: `{"Error": "The error message"}`
+
+## AWS CLI alias
+
+The AWS CLI has a way to add [command aliases](https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-alias.html), and you can use this with `aws-whoami`.
+In `~/.aws/cli/alias`, add `whoami = !aws-whoami` under the `[toplevel]` section, like this:
+
+```ini
+[toplevel]
+
+whoami = !aws-whoami
+```
+
+Now you can run the command `aws whoami` as if it was part of the AWS CLI.
+
+Of course, even if you're not using `aws-whoami` you can create `aws whoami` as an alias for `GetCallerIdentity` directly, like this:
+
+```ini
+[toplevel]
+
+whoami = sts get-caller-identity --output table
+```
