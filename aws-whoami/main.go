@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -32,7 +31,7 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-var Version string = "2.5"
+var Version string = "2.6"
 var DisableAccountAliasEnvVarName = "AWS_WHOAMI_DISABLE_ACCOUNT_ALIAS"
 
 type Whoami struct {
@@ -251,6 +250,23 @@ func (whoami Whoami) Format() string {
 	return strings.Join(lines, "\n")
 }
 
+type errorRecord struct {
+	Error string
+}
+
+func printError(err error, useJson bool) {
+	if useJson {
+		bytes, err := json.Marshal(errorRecord{err.Error()})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "{\"Error\": \"Failed to serialize error\"}")
+		} else {
+			fmt.Fprintln(os.Stderr, string(bytes))
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, err.Error())
+	}
+}
+
 func main() {
 	profile := flag.String("profile", "", "A config profile to use")
 	useJson := flag.Bool("json", false, "Output as JSON")
@@ -265,7 +281,8 @@ func main() {
 
 	awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithSharedConfigProfile(*profile))
 	if err != nil {
-		log.Fatal(err) // exits
+		printError(err, *useJson)
+		os.Exit(1)
 	}
 
 	whoamiParams := NewWhoamiParams()
@@ -278,13 +295,15 @@ func main() {
 	Whoami, err := NewWhoami(awsConfig, whoamiParams)
 
 	if err != nil {
-		log.Fatal(err) // exits
+		printError(err, *useJson)
+		os.Exit(1)
 	}
 
 	if *useJson {
 		bytes, err := json.Marshal(Whoami)
 		if err != nil {
-			log.Fatal(err) // exits
+			printError(err, *useJson)
+			os.Exit(1)
 		}
 		fmt.Println(string(bytes))
 	} else {

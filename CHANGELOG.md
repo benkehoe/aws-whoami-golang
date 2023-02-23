@@ -2,6 +2,10 @@
 
 `aws-whoami` uses [monotonic versioning](https://github.com/benkehoe/monotonic-versioning-manifesto) since v1.0 across both [the older Python implementation](https://github.com/benkehoe/aws-whoami) (compatibility number 1) and this Go implementation (compatibility number 2).
 
+## v2.6
+
+* With `--json`, errors are printed as JSON in the form `{"Error": "The error message"}`
+
 ## v2.5
 
 * Add `--disable-account-alias` flag.

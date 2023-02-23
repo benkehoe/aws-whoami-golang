@@ -60,7 +60,7 @@ To selectively disable it, you can also set the value to a comma-separated list 
 
 ## JSON output
 
-The JSON object that is printed when using the `--json` flag always includes the following fields:
+The JSON object that is printed when using the `--json` flag always (when successful, see below for errors) includes the following fields:
 * `Account`
 * `AccountAliases` (NOTE: this is a list)
 * `Arn`
@@ -78,3 +78,5 @@ For the account root, both the `Type` and `Name` are `"root"`.
 `SSOPermissionSet` is set if the assumed role name conforms to the format `AWSReservedSSO_{permission-set}_{random-tag}`, otherwise it is `null`.
 
 Note that the `AccountAliases` field is an empty list when account alias checking is disabled, not `null`.
+
+If there is an error, a JSON object is printed with the following structure: `{"Error": "The error message"}`
