@@ -32,7 +32,8 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-var Version string = "2.4"
+var Version string = "2.5"
+var DisableAccountAliasEnvVarName = "AWS_WHOAMI_DISABLE_ACCOUNT_ALIAS"
 
 type Whoami struct {
 	Account          string
@@ -47,39 +48,42 @@ type Whoami struct {
 }
 
 type WhoamiParams struct {
-	DisableAccountAlias         bool
-	DisableAccountAliasAccounts []string
+	DisableAccountAlias       bool
+	DisableAccountAliasValues []string
 }
 
 func NewWhoamiParams() WhoamiParams {
 	var params WhoamiParams
-	getDisableAccountAlias(&params)
+	disableAccountAliasValue := os.Getenv(DisableAccountAliasEnvVarName)
+	populateDisableAccountAlias(&params, disableAccountAliasValue)
 	return params
 }
 
-func getDisableAccountAlias(params *WhoamiParams) {
-	envStr := os.Getenv("AWS_WHOAMI_DISABLE_ACCOUNT_ALIAS")
-	switch strings.ToLower(envStr) {
+func populateDisableAccountAlias(params *WhoamiParams, disableAccountAliasValue string) {
+	switch strings.ToLower(disableAccountAliasValue) {
 	case "":
 		fallthrough
 	case "0":
 		fallthrough
 	case "false":
 		params.DisableAccountAlias = false
+		params.DisableAccountAliasValues = nil
 		return
 	case "1":
 		fallthrough
 	case "true":
 		params.DisableAccountAlias = true
+		params.DisableAccountAliasValues = nil
 		return
 	default:
-		accounts := strings.Split(envStr, ",")
+		accounts := strings.Split(disableAccountAliasValue, ",")
 		if len(accounts) > 0 {
 			params.DisableAccountAlias = true
-			params.DisableAccountAliasAccounts = accounts
+			params.DisableAccountAliasValues = accounts
 			return
 		} else {
 			params.DisableAccountAlias = false
+			params.DisableAccountAliasValues = nil
 			return
 		}
 	}
@@ -89,21 +93,67 @@ func (params WhoamiParams) GetDisableAccountAlias(whoami Whoami) bool {
 	if !params.DisableAccountAlias {
 		return false
 	}
-	if params.DisableAccountAliasAccounts == nil {
+	if params.DisableAccountAliasValues == nil {
 		return true
 	}
-	for _, disabledValue := range params.DisableAccountAliasAccounts {
+	for _, disabledValue := range params.DisableAccountAliasValues {
 		if strings.HasPrefix(whoami.Account, disabledValue) || strings.HasSuffix(whoami.Account, disabledValue) {
 			return true
 		}
 		if whoami.Arn == disabledValue || whoami.Name == disabledValue {
 			return true
 		}
-		if whoami.Type == "assumed-role" && *whoami.RoleSessionName == disabledValue {
+		if whoami.RoleSessionName != nil && *whoami.RoleSessionName == disabledValue {
+			return true
+		}
+		if whoami.SSOPermissionSet != nil && *whoami.SSOPermissionSet == disabledValue {
 			return true
 		}
 	}
 	return false
+}
+
+func populateWhoamiFromGetCallerIdentityOutput(whoami *Whoami, getCallerIdentityOutput sts.GetCallerIdentityOutput) error {
+	whoami.Account = *getCallerIdentityOutput.Account
+	whoami.Arn = *getCallerIdentityOutput.Arn
+	whoami.UserId = *getCallerIdentityOutput.UserId
+
+	arnFields := strings.Split(whoami.Arn, ":")
+
+	var arnResourceFields []string
+	if arnFields[len(arnFields)-1] == "root" {
+		arnResourceFields = []string{"root", "root"}
+	} else {
+		arnResourceFields = strings.SplitN(arnFields[len(arnFields)-1], "/", 2)
+		if len(arnResourceFields) < 2 {
+			return fmt.Errorf("arn %v has an unknown format", whoami.Arn)
+		}
+	}
+
+	whoami.Type = arnResourceFields[0]
+	if whoami.Type == "assumed-role" {
+		nameFields := strings.SplitN(arnResourceFields[1], "/", 2)
+		if len(arnResourceFields) < 2 {
+			return fmt.Errorf("arn %v has an unknown format", whoami.Arn)
+		}
+		whoami.Name = nameFields[0]
+		whoami.RoleSessionName = &nameFields[1]
+	} else if whoami.Type == "user" {
+		nameFields := strings.Split(arnResourceFields[1], "/")
+		whoami.Name = nameFields[len(nameFields)-1]
+	} else {
+		whoami.Name = arnResourceFields[1]
+	}
+
+	if whoami.Type == "assumed-role" && strings.HasPrefix(whoami.Name, "AWSReservedSSO") {
+		nameFields := strings.Split(whoami.Name, "_")
+		if len(nameFields) >= 3 {
+			permSetStr := strings.Join(nameFields[1:len(nameFields)-1], "_")
+			whoami.SSOPermissionSet = &permSetStr
+		}
+	}
+
+	return nil
 }
 
 func NewWhoami(awsConfig aws.Config, params WhoamiParams) (Whoami, error) {
@@ -120,40 +170,10 @@ func NewWhoami(awsConfig aws.Config, params WhoamiParams) (Whoami, error) {
 
 	whoami.Region = awsConfig.Region
 
-	whoami.Account = *getCallerIdentityOutput.Account
-	whoami.Arn = *getCallerIdentityOutput.Arn
-	whoami.UserId = *getCallerIdentityOutput.UserId
+	err = populateWhoamiFromGetCallerIdentityOutput(&whoami, *getCallerIdentityOutput)
 
-	arnFields := strings.Split(whoami.Arn, ":")
-
-	var arnResourceFields []string
-	if arnFields[len(arnFields)-1] == "root" {
-		arnResourceFields = []string{"root", "root"}
-	} else {
-		arnResourceFields = strings.SplitN(arnFields[len(arnFields)-1], "/", 2)
-		if len(arnResourceFields) < 2 {
-			return whoami, fmt.Errorf("arn %v has an unknown format", whoami.Arn)
-		}
-	}
-
-	whoami.Type = arnResourceFields[0]
-	if whoami.Type == "assumed-role" {
-		nameFields := strings.SplitN(arnResourceFields[1], "/", 2)
-		if len(arnResourceFields) < 2 {
-			return whoami, fmt.Errorf("arn %v has an unknown format", whoami.Arn)
-		}
-		whoami.Name = nameFields[0]
-		whoami.RoleSessionName = &nameFields[1]
-	} else {
-		whoami.Name = arnResourceFields[1]
-	}
-
-	if whoami.Type == "assumed-role" && strings.HasPrefix(whoami.Name, "AWSReservedSSO") {
-		nameFields := strings.Split(whoami.Name, "_")
-		if len(nameFields) >= 3 {
-			permSetStr := strings.Join(nameFields[1:len(nameFields)-1], "_")
-			whoami.SSOPermissionSet = &permSetStr
-		}
+	if err != nil {
+		return whoami, err
 	}
 
 	if !params.GetDisableAccountAlias(whoami) {
@@ -234,6 +254,7 @@ func (whoami Whoami) Format() string {
 func main() {
 	profile := flag.String("profile", "", "A config profile to use")
 	useJson := flag.Bool("json", false, "Output as JSON")
+	disableAccountAlias := flag.Bool("disable-account-alias", false, "Disable account alias check")
 	showVersion := flag.Bool("version", false, "Display the version")
 	flag.Parse()
 
@@ -244,24 +265,26 @@ func main() {
 
 	awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithSharedConfigProfile(*profile))
 	if err != nil {
-		log.Fatal(err)
-		return
+		log.Fatal(err) // exits
 	}
 
 	whoamiParams := NewWhoamiParams()
 
+	if *disableAccountAlias {
+		whoamiParams.DisableAccountAlias = true
+		whoamiParams.DisableAccountAliasValues = nil
+	}
+
 	Whoami, err := NewWhoami(awsConfig, whoamiParams)
 
 	if err != nil {
-		log.Fatal(err)
-		return
+		log.Fatal(err) // exits
 	}
 
 	if *useJson {
 		bytes, err := json.Marshal(Whoami)
 		if err != nil {
-			log.Fatal(err)
-			return
+			log.Fatal(err) // exits
 		}
 		fmt.Println(string(bytes))
 	} else {

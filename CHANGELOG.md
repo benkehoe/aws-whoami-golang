@@ -2,6 +2,15 @@
 
 `aws-whoami` uses [monotonic versioning](https://github.com/benkehoe/monotonic-versioning-manifesto) since v1.0 across both [the older Python implementation](https://github.com/benkehoe/aws-whoami) (compatibility number 1) and this Go implementation (compatibility number 2).
 
+## v2.5
+
+* Add `--disable-account-alias` flag.
+* Handle paths in user ARNs.
+* Disable account alias check by matching SSO Permission Set name.
+* Internal revamp for testing.
+* Change repo layout to work better with `go install`.
+* Add tests.
+
 ## v2.4
 
 * Handle root user
