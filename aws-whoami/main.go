@@ -31,7 +31,7 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-var Version string = "2.6"
+var version string = "(unknown)" // this is set by goreleaser
 var DisableAccountAliasEnvVarName = "AWS_WHOAMI_DISABLE_ACCOUNT_ALIAS"
 
 type Whoami struct {
@@ -275,7 +275,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println(Version)
+		fmt.Println(version)
 		return
 	}
 
