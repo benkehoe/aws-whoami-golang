@@ -1,28 +1,32 @@
+name: release
+
 on:
-  release:
-    types: created
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write # for publishing to github releases
 
 jobs:
-  releases-matrix:
-    name: Release Go Binary
+  goreleaser:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # build and publish in parallel: linux/amd64, linux/arm64, windows/amd64, darwin/amd64, darwin/arm64
-        goos: [linux, windows, darwin]
-        goarch: [amd64, arm64]
-        exclude:
-          - goarch: arm64
-            goos: windows
     steps:
-    - uses: actions/checkout@v3
-    - uses: wangyoucao577/go-release-action@v1.35
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        goos: ${{ matrix.goos }}
-        goarch: ${{ matrix.goarch }}
-        extra_files: LICENSE README.md
-        compress_assets: "true"
-        md5sum: "false"
-        project_path: aws-whoami
-        binary_name: aws-whoami
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - run: git fetch --force --tags
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: stable
+
+      - uses: goreleaser/goreleaser-action@v4
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_HOMEBREW_TAP_TOKEN: ${{ secrets.GORELEASER_HOMEBREW_TAP_TOKEN }}
